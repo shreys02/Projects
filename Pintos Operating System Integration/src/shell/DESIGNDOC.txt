@@ -1,0 +1,268 @@
+			+------------------+
+			|      CS 124      |
+			| PROJECT 1: SHELL |
+			|  DESIGN DOCUMENT |
+			+------------------+
+				   
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Yunha Jo <yjo@caltech.edu>
+Shrey Srivastava <ssrivas2@caltech.edu>
+
+>> Specify how many late tokens you are using on this assignment:  
+We are using 0 late tokens, as we got permission from Professor Pinkston 
+to have a 1 day extension on this assignment. 
+
+>> What is the Git repository URL and commit hash for your submission?
+   (You only need to include the commit-hash in the file you submit
+   on Moodle.)
+
+   Repository URL: https://github.com/caltech-cs124-2024sp/cs124-2024sp-404-team-not-found
+   commit ... 1ed82d55f07ff2ed5ddef9f125cfc2c14d50ab71 [The Last One]
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, notes for the
+>> TAs, or extra credit, please include them here.
+We completed the following extra credit: 1. Allowing for multi-line commands, 
+2. Allowing for appending to a file instead of just truncating, and 3. Error
+redirection into specified file. 
+
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course instructors.
+
+We used code given to us in examples/shell.c we mainly used the code for
+reading the command line input.
+
+			   COMMAND SHELL
+			   =============
+
+---- LOGISTICS ----
+
+These questions will help us to keep track of the difficulty level of
+assignments, as well as keeping track of which team members worked on
+which parts.
+
+>> L1: How many hours did each team member spend on this assignment?
+   Make sure that each member's total time is listed.
+
+Yunha Jo: ~20 hours
+Shrey Srivastava: ~20 hours
+
+>> L2: What did each team member focus on for this assignment?  Keep
+   descriptions to 25-30 words or less.
+
+Yunha Jo: worked on string parsing commands and logic
+Shrey Srivastava: worked on creating command structures and execution logic
+Rest of the program was worked on together.  
+
+---- DATA STRUCTURES ----
+
+>> A1: Describe how your command shell manages parsing and executing
+>> commands that contain arguments and pipes, using the example
+>> command "a arg1 arg2 | b arg1 | c arg1 arg2 arg3".  How does your
+>> shell internally represent such a command?
+
+We use a command_t struct that stores each individual command. Command_t
+struct holds arguments for the command, number of the arguments, name
+of the input file, name of the output file, and the name of the error file (bonus). 
+For the example command above, the command would be parsed 
+according to the pipe characters (|) first (as long as they are not inside quotation marks). 
+Then, individual "subcommands" are made into command_t objects. 
+Command_t for the subcommands created would be equal to the following:
+
+Command_t 1: "a arg1 arg2"
+command1->args = {a, arg1, arg2, NULL}
+command1->size = 3
+command1->input_filename = NULL
+command1->output_filename = NULL
+command1->error_filename = NULL
+
+Command_t 2: "b arg1"
+command2->args = {b, arg1, NULL}
+command2->size = 2
+command2->input_filename = NULL
+command2->output_filename = NULL
+command1->error_filename = NULL
+
+Command_t 3: "c arg1 arg2 arg3"
+command3->args = {a, arg1, arg2, arg3, NULL}
+command3->size = 4
+command3->input_filename = NULL
+command3->output_filename = NULL
+command1->error_filename = NULL
+
+>> A2: Now, given the command:
+>> "a arg1 arg2 < inp.txt | b arg1 | c arg1 arg2 arg3 > out.txt"
+>> Briefly explain specifically how the redirections are parsed and
+>> represented, and by what processes.
+
+Prior to parsing invidual subcommands, we first eliminate leading and 
+trailing spaces, as well as other insignificant spaces that could be 
+removed but result in the same command. 
+
+Then, we first parse the command according to the
+pipe character. The command is broken up according to this character
+into subcommands. Then, each subcommands are parsed according to 
+"significant" spaces (spaces that are important) and redirection characters.
+String parsed after '<' character is saved as the input filename, if not 
+inside quotes. Similarly, string parsed after '>' is saved as the
+output filename. 
+
+Command_t 1: "a arg1 arg2"
+command1->args = {a, arg1, arg2, NULL}
+command1->size = 3
+command1->input_filename = inp.txt
+command1->output_filename = NULL
+command1->error_filename = NULL
+
+Command_t 2: "b arg1"
+command2->args = {b, arg1, NULL}
+command2->size = 2
+command2->input_filename = NULL
+command2->output_filename = NULL
+command1->error_filename = NULL
+
+Command_t 3: "c arg1 arg2 arg3"
+command3->args = {a, arg1, arg2, arg3, NULL}
+command3->size = 4
+command3->input_filename = NULL
+command3->output_filename = out.txt
+command1->error_filename = NULL
+
+---- ALGORITHMS ----
+
+>> A3: Illustrate how you solved the problem of setting up
+>> redirection in a simple command like "a < inp.txt > out.txt", by
+>> describing what process takes care of the redirection and when.
+
+As explained above, filenames for redirection are taken care of
+when the command is first parsed. The redirected input and output 
+filenames are saved into the command_t struct used for handling
+piped commands. This occurs when we are initializing the command_t object (they 
+are passed into the constructor). Actual redirection is taken care of in the child
+processed after it is forked from the parent process. We use dup2
+to redirect the input file when there exists a file to redirect into.
+Similarly, we use dup2 to redirect the output file if there exists one.
+We ensure to provide all the necessary permissions to read/write/create, etc. 
+
+>> A4: Illustrate how you solved the problem of setting up the pipes
+>> between multiple operations in a single command, by describing
+>> what each process is responsible for.  For example, given the
+>> command "a | b | c", describe the sequence of steps in setting up
+>> the processes and their pipes, starting with your command shell's
+>> process, and going through the execution of programs a, b and c.
+>> Keep your description of each process' responsibilities limited to
+>> ~25 words or less.
+
+Before processes are forked, we first parse the command and create an
+array of command_ts that each store information about each operation.
+Then, in the main process, before any forking happens, we call the pipe
+function to create the necessary pipes. Afterwards, for each operation 
+(or subcommand), we call fork, creating child and parent process.
+The Child process is responsible for redirecting input and output if there
+exists files for input and output, otherwise using dup2() to set STDIN_FILENO
+and STDOUT_FILENO into the appropriate file descriptors and then closing them. 
+Finally, Child process calls exec to execute the process. After 
+execing, the memory associated with that command is freed. 
+The parent process is then responsible for closing their end of the file 
+descriptors, and then waiting for the children processes to finish.
+
+>> A5: Similarly, describe the details of how terminated processes are
+>> reaped in the example command "a | b | c".
+
+For the command above, three different children processes will be forked.
+The parent process will wait for the three children to finish (after 
+closing their end of the file descriptors), and it will only exit
+when all three processes have finished (parent process keeps a counter
+of number of finished children processes, which is incremented when 
+parent receives that child process has exited). 
+
+>> A6: Similarly, describe which processes are responsible for setting
+>> up the redirections in the example command
+>> "a < inp.txt | b | c > out.txt".
+
+Children processes are responsible for setting up the redirections. For the
+command, three different pipes would be created. In the parent process, three
+children processes would be forked, one for "a < inp.txt", one for "b", and one
+for "c > out.txt". First child process that is forked for "a < inp.txt" would
+handle redirecting the input to inp.txt, and the third child process that is
+forked will handle redirecting the output to out.txt.
+
+---- RATIONALE ----
+
+>> A7: Why must the chdir and exit commands be implemented as built-in
+>> functions, rather than external programs?
+
+We tried to implement these functions within our command struct framework using
+execvp, however it did not recognize either of these two commands, and as such
+we impemented them as built-in functions. We believe this has to do with the 
+fact that these commands directly impact the shell's environment. 
+
+>> A8: Why did you ultimately choose this design?  In what ways is it
+>> superior to other designs you considered as you developed your solution?
+
+Our design revolved around the command struct, and then our execution logic for 
+pipes/redirection. We chose this design because early on we realized that every 
+command would need to contain certain attributes: input/output (for redirection), 
+size, and the arguments themselves. We also chose to store individual commands in an 
+array instead of a linked-list because it made it easier for us to tackle debugging and
+freeing all the commands. Additionally for the arguments of each command, we stored them
+in an array because this was the format that exec expected them to be in. 
+
+For the execution logic, storing all the file descriptors in one array made it easier 
+for us to reference the appropriate indices accross piped commands. 
+
+
+>> A9: Did you take any steps to facilitate development of the command
+>> shell in parallel, e.g. designing shared data structures or integration
+>> points up front?  How well did your approach work for your team?  Feel
+>> free to share any positive or negative experiences in this vein.
+
+As mentioned, we mostly worked together on majority of the parts, so 
+command shell was not developed in parallel. Designing data structures
+and integration of the structures were don in parallel, which worked well
+for the team. We made sure to have communicated what the data structure
+would look like, so integration was not extremely difficult.
+
+			  SURVEY QUESTIONS
+			  ================
+
+Answering these questions is optional, but it will help us improve the
+course in future years.  Feel free to tell us anything you want - these
+questions are just to spur your thoughts.  Also, feel free to be completely
+honest if there are issues with the assignment or the course - you won't be
+penalized.  We can't fix things until we know about them.  :-)
+
+>> In your opinion, was this assignment, or any of the parts of it, too
+>> easy or too hard?  Did it take too long or too little time?
+
+We think that a lot of the assignment was familiarizing ourselves with
+C language. Once we understood what we were supposed to do with forking
+and piping, the assignment was not as hard. It did take quite a long 
+time to debug (~60% of our time). 
+
+>> Did you find that working on a particular part of the assignment gave
+>> you greater insight into some aspect of OS design?
+
+We think that learning about and working through the pipe handing gave us
+greater insight into how information is transferred between different child
+processes. 
+
+>> Were there any parts of the assignment that you felt were unnecessarily
+>> tedious or pointless?
+String parsing because there were a lot of cases to consider. 
+
+>> Is there some particular fact or hint we should give students in
+>> future quarters to help them solve the problems?  Conversely, did you
+>> find any of our guidance to be misleading?
+We think Professor Pinkston's Piazza Post was SUPER helpful. 
+
+>> Do you have any suggestions for the instructor and/or TAs to more
+>> effectively assist students, either for future quarters or the remaining
+>> projects?
+
+>> Any other comments?
